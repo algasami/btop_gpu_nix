@@ -5,7 +5,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
     flake-utils.url = "github:numtide/flake-utils/4022d587cbbfd70fe950c1e2083a02621806a725";
     btop_src = {
-      url = "github:aristocratos/btop/285fb215d12a5e0c686b29e1039027cbb2b246da";
+      url = "github:aristocratos/btop?ref=main&shallow=1";
+      # need the latest package
       flake = false;
     };
   };
@@ -19,19 +20,25 @@
   in flake-utils.lib.eachDefaultSystem (system:
     let
       name = "btop_gpu";
-      src = ./.;
+      src = btop_src;
       pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
     in
     {
       packages.default = with pkgs; stdenv.mkDerivation {
         inherit system name src version;
         buildPhase = ''
-          mkdir -p $out/build
-          cp -r ${btop_src}/* $out/build
-          cd $out/build && make GPU_SUPPORT=true
+          make GPU_SUPPORT=true
         '';
         installPhase = ''
-          cd $out/build && make install PREFIX=$out
+          mkdir $out
+          make install PREFIX=$out
+        '';
+
+        # TODO: This is only for fix. I should fix it soon
+        postFixup = ''
+          patchelf \
+          --add-needed /run/opengl-driver/lib/libnvidia-ml.so \
+          $out/bin/btop
         '';
 
         # runtime dependencies
@@ -41,6 +48,7 @@
         nativeBuildInputs = with pkgs; [
           gnumake
           coreutils
+          patchelf
         ];
       };
     }
